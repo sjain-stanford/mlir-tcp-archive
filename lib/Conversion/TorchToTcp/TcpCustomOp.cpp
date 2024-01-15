@@ -138,11 +138,10 @@ public:
         rewriter.getNamedAttr("accumulate", rewriter.getBoolAttr(accumulate)));
     attrs.push_back(
         rewriter.getNamedAttr("unsafe", rewriter.getBoolAttr(unsafe)));
-    attrs.push_back(rewriter.getNamedAttr(
-        "op_name", rewriter.getStringAttr(op->getName().getStringRef())));
 
-    rewriter.replaceOpWithNewOp<tcp::CustomOp>(op, resultTypes, operands,
-                                               attrs);
+    auto newOp = rewriter.replaceOpWithNewOp<tcp::CustomOp>(op, resultTypes,
+                                                            operands, attrs);
+    newOp.setOpName(op->getName().getStringRef());
     return success();
   }
 };
@@ -220,11 +219,9 @@ public:
     attrs.push_back(
         rewriter.getNamedAttr("groups", rewriter.getI64IntegerAttr(groups)));
 
-    auto replOp = rewriter.replaceOpWithNewOp<tcp::CustomOp>(op, resultTypes,
-                                                             operands, attrs);
-
-    replOp.setOpName(op->getName().getStringRef());
-
+    auto newOp = rewriter.replaceOpWithNewOp<tcp::CustomOp>(op, resultTypes,
+                                                            operands, attrs);
+    newOp.setOpName(op->getName().getStringRef());
     return success();
   }
 };
