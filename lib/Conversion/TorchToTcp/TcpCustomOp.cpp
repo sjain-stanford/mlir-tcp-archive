@@ -20,6 +20,12 @@
 
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Debug.h"
+#define DEBUG_TYPE "myPass"
+
+#include "mlir/TableGen/OpClass.h"
+#include "mlir/TableGen/Operator.h"
+
+#include <iostream>
 
 using namespace mlir;
 using namespace mlir::tcp;
@@ -27,6 +33,50 @@ using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
 namespace {
+
+template <typename AtenOpT>
+class ConvertAtenOp : public OpConversionPattern<AtenOpT> {
+public:
+  using OpConversionPattern<AtenOpT>::OpConversionPattern;
+  using OpAdaptor = typename AtenOpT::Adaptor;
+  LogicalResult
+  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SmallVector<Type> resultTypes;
+    if (failed(OpConversionPattern<AtenOpT>::getTypeConverter()->convertTypes(
+            op->getResultTypes(), resultTypes))) {
+      return failure();
+    }
+
+    auto operands = op->getOperands();
+    // Iterate over the operands and print their information.
+    for (auto operand : operands) {
+      // You can access information about the operand, such as its type.
+      auto operandType = operand.getType();
+
+      //auto *definingOp = operand.getDefiningOp();
+      //auto operandName = definingOp->getName().getStringRef();
+      
+      // Print information about the operand.
+      LLVM_DEBUG(llvm::dbgs() << "Operand Type: " << operandType << "\n");
+      LLVM_DEBUG(llvm::dbgs() << "Operand Name: " << operand.name << "\n");
+    }
+
+    int64_t dimVal;
+    if (!matchPattern(op.getDim(), m_TorchConstantInt(&dimVal)))
+      return failure();
+
+    auto indexAttr =
+        rewriter.getNamedAttr("axis", rewriter.getI64IntegerAttr(dimVal));
+
+    auto newOp = rewriter.replaceOpWithNewOp<tcp::CustomOp>(
+        op, resultTypes, ValueRange{adaptor.getSelf(), adaptor.getIndex()},
+        indexAttr);
+    newOp.setOpName(op->getName().getStringRef());
+    return success();
+  }
+};
+
 class ConvertAtenGatherOp : public OpConversionPattern<AtenGatherOp> {
 public:
   using OpConversionPattern<AtenGatherOp>::OpConversionPattern;
@@ -233,9 +283,14 @@ void torch_to_tcp::populateTcpCustomOpPatternsAndLegality(
     ConversionTarget &target, const llvm::StringSet<> &convertTorchOpsSet) {
 
 #define INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN(AtenOp)                           \
-  torch_to_tcp::addPatternIfOpInConvertTorchOpsSet<Convert##AtenOp, AtenOp>(   \
+  torch_to_tcp::addPatternIfOpInConvertTorchOpsSet<ConvertAtenOp<AtenOp>, AtenOp>(   \
       typeConverter, patterns, target, convertTorchOpsSet)
   INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN(AtenGatherOp);
+#undef INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN
+
+#define INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN(AtenOp)                           \
+  torch_to_tcp::addPatternIfOpInConvertTorchOpsSet<Convert##AtenOp, AtenOp>(   \
+      typeConverter, patterns, target, convertTorchOpsSet)
   INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN(AtenIndexTensorHackedTwinOp);
   INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN(Aten_IndexPutImplOp);
 #undef INSERT_ATEN_TO_TCP_CUSTOM_OP_PATTERN

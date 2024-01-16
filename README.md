@@ -52,3 +52,55 @@ The following CI workflows are automatically triggered anytime upstream dependen
 - [![Bazel Build and Test (llvm-project)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestLlvm.yml/badge.svg)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestLlvm.yml)
 - [![Bazel Build and Test (torch-mlir)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestTorchmlir.yml/badge.svg)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestTorchmlir.yml)
 - [![Bazel Build and Test (stablehlo)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestStablehlo.yml/badge.svg)](https://github.com/cruise-automation/mlir-tcp/actions/workflows/bazelBuildAndTestStablehlo.yml)
+
+## Debugging Guide
+
+Debug prints
+```C++
+llvm::errs() << "Operand Type: " << operandType << "\n";
+op.emitWarning() << "Operand Type: " << operandType << "\n";
+```
+
+```shell
+bazel build --config=clang_linux //:tcp-opt
+bazel-bin/tcp-opt --some-pass foo.mlir
+```
+
+
+https://llvm.org/docs/ProgrammersManual.html#the-llvm-debug-macro-and-debug-option
+```C++
+#include "llvm/Support/Debug.h"
+#define DEBUG_TYPE "mydebugtag"
+
+LLVM_DEBUG(llvm::dbgs() << "This log will only show up when -debug or -debug-only=mydebugflag flags are present\n");
+```
+
+GDB
+```shell
+bazel build --config=clang_linux --config=gdb //:tcp-opt
+```
+Then run:
+
+$ gdb --args bazel-bin/tcp-opt 
+
+For help with gdb commands please refer to this gdb cheat sheet.
+https://gist.github.com/rkubik/b96c23bd8ed58333de37f2b8cd052c30
+
+https://mlir.llvm.org/getting_started/Debugging/
+
+
+LLVM Symbolizer
+If you get a stack dump upon crash like this:
+```
+Stack dump without symbol names (ensure you have llvm-symbolizer in your PATH or set the environment var `LLVM_SYMBOLIZER_PATH` to point to it):
+0  tcp-opt   0x000055ac1c9c0c1d
+1  tcp-opt   0x000055ac1c9c110b
+2  tcp-opt   0x000055ac1c9be846
+3  tcp-opt   0x000055ac1c9c1855
+4  libc.so.6 0x00007f7011c6a520
+```
+
+```shell
+bazel build --config=clang_linux @llvm-project//llvm:llvm-symbolizer
+export LLVM_SYMBOLIZER_PATH=`pwd`/bazel-bin/external/llvm-project/llvm/llvm-symbolizer
+```
